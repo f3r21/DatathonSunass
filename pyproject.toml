@@ -1,0 +1,71 @@
+[project]
+name = "datathon-sunass"
+version = "0.1.0"
+description = "Entrega Datathon SUNASS 2026 — Categoria I Operacional (UCSP)"
+requires-python = ">=3.12,<3.13"
+readme = "README.md"
+authors = [{ name = "f3r21" }]
+
+dependencies = [
+    # IO y datos
+    "polars>=1.12",
+    "pandas>=2.2",
+    "pyarrow>=17.0",
+    "pyreadstat>=1.2",
+    "openpyxl>=3.1",
+    "xlsxwriter>=3.2",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    # ML clasico
+    "scikit-learn>=1.5",
+    "xgboost>=2.1",
+    "lightgbm>=4.5",
+    "imbalanced-learn>=0.12",
+    "statsmodels>=0.14",
+    "shap>=0.46",
+    "ruptures>=1.1",
+    "rapidfuzz>=3.10",
+    # Geo
+    "geopandas>=1.0",
+    "folium>=0.17",
+    "shapely>=2.0",
+    "pyproj>=3.6",
+    # Viz
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "plotly>=5.24",
+    # Dashboard y auth
+    "streamlit>=1.39",
+    "streamlit-authenticator>=0.4",
+    "bcrypt>=4.2",
+    # Notebook
+    "jupyter>=1.1",
+    "ipykernel>=6.29",
+    # LLM y RAG
+    "openai>=1.54",
+    "llama-index>=0.12",
+    "llama-index-llms-ollama>=0.4",
+    "llama-index-embeddings-huggingface>=0.4",
+    "llama-index-vector-stores-chroma>=0.3",
+    "chromadb>=0.5",
+    "sentence-transformers>=3.2",
+    "pymupdf>=1.24",
+    "python-docx>=1.1",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.7", "mypy>=1.13"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
