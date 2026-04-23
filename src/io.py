@@ -29,12 +29,15 @@ _INTERRUP_NUMERIC_AS_STRING = (
     "Ndeconexionesdomiciliariasa",
     "Unidadesdeusoafectadas",
 )
-_INTERRUP_DATE_COLS = (
-    "Fechadeinicio",
-    "Fechadefin",
-)
+
+# Prefijos que sugieren columna temporal en el .dta (auto-deteccion).
+_DATE_COL_PREFIXES = ("Fecha", "fecha", "date", "Date", "FECHA")
 
 _EMPTY_TOKENS = ("", " ", "NA", "N/A", "null", "None", ".")
+
+# Engine explicito para xlsx; polars 1.40 pide fastexcel por default y no lo
+# tenemos, asi que forzamos openpyxl que si esta instalado.
+_XLSX_ENGINE = "openpyxl"
 
 
 @dataclass(frozen=True)
@@ -125,14 +128,19 @@ def load_interrupciones(path: Path | str | None = None) -> pl.DataFrame:
         if col in df.columns:
             numeric_casts.append(_to_numeric(df.get_column(col)).alias(col))
         else:
-            logger.warning("Columna numerica-string esperada ausente: %s", col)
+            logger.debug("Columna numerica-string esperada ausente: %s", col)
 
-    date_casts: list[pl.Expr] = []
-    for col in _INTERRUP_DATE_COLS:
-        if col in df.columns:
-            date_casts.append(_ensure_datetime(df.get_column(col)).alias(col))
-        else:
-            logger.warning("Columna de fecha esperada ausente: %s", col)
+    # Auto-deteccion de columnas de fecha por prefijo (Fecha*, date*, etc).
+    date_cols = [
+        c for c in df.columns
+        if any(c.startswith(pref) for pref in _DATE_COL_PREFIXES)
+        and df.schema[c] not in (pl.Datetime, pl.Date)
+    ]
+    date_casts: list[pl.Expr] = [
+        pl.col(c).cast(pl.Datetime, strict=False).alias(c) for c in date_cols
+    ]
+    if date_cols:
+        logger.info("Columnas de fecha auto-detectadas: %s", date_cols)
 
     exprs = [e for e in (*numeric_casts, *date_casts)]
     if exprs:
@@ -174,7 +182,7 @@ def load_morea(
     df_sensores = pl.read_parquet(resolved_parquet)
 
     logger.info("Cargando estaciones MOREA desde %s", resolved_estaciones)
-    df_estaciones = pl.read_excel(resolved_estaciones)
+    df_estaciones = pl.read_excel(resolved_estaciones, engine=_XLSX_ENGINE)
 
     logger.info(
         "MOREA: %d lecturas, %d estaciones, %d columnas sensores",
@@ -210,11 +218,11 @@ def load_datathon_tabular(
         df = pl.read_csv(resolved, try_parse_dates=True, infer_schema_length=10_000)
     elif suffix in (".xlsx", ".xls"):
         if isinstance(sheet, int):
-            df = pl.read_excel(resolved, sheet_id=sheet + 1)
+            df = pl.read_excel(resolved, sheet_id=sheet + 1, engine=_XLSX_ENGINE)
         elif isinstance(sheet, str):
-            df = pl.read_excel(resolved, sheet_name=sheet)
+            df = pl.read_excel(resolved, sheet_name=sheet, engine=_XLSX_ENGINE)
         else:
-            df = pl.read_excel(resolved)
+            df = pl.read_excel(resolved, engine=_XLSX_ENGINE)
     else:
         raise ValueError(f"Extension no soportada: {suffix}. Usa .csv, .xlsx o .xls.")
 
@@ -228,8 +236,8 @@ def load_datathon_tabular(
 def join_morea_estaciones(
     sensores: pl.DataFrame,
     estaciones: pl.DataFrame,
-    sensor_key: str = "estacion",
-    station_key: str = "estacion",
+    sensor_key: str = "estacion_id",
+    station_key: str = "ESTACIÓN",
 ) -> pl.DataFrame:
     """Join defensivo entre sensores y estaciones.
 
