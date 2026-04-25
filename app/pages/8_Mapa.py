@@ -9,11 +9,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import base64
-
 import folium
 import polars as pl
 import streamlit as st
+from streamlit_folium import st_folium
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT) not in sys.path:
@@ -146,16 +145,12 @@ for row in df_geo.iter_rows(named=True):
 
 folium.LayerControl().add_to(m)
 
-# Renderizado: folium produce un standalone HTML page; lo servimos via data URL
-# dentro de un iframe controlado por nosotros. Esto evita el problema de
-# "Make this Notebook Trusted" cuando _repr_html_() se anida en st.html().
-_full_html = m.get_root().render()
-_b64 = base64.b64encode(_full_html.encode("utf-8")).decode("ascii")
-st.html(
-    f'<iframe src="data:text/html;base64,{_b64}" '
-    f'width="100%" height="560" '
-    f'style="border:none;border-radius:6px;"></iframe>'
-)
+# streamlit-folium es la integracion oficial de folium con Streamlit. Renderiza
+# como componente nativo (no iframe srcdoc), evita el "Make this Notebook
+# Trusted" prompt y permite capturar interacciones (clicks, zoom) si las
+# necesitamos despues. returned_objects=[] desactiva el rerun en cada interaccion
+# para no volver a entrenar/recargar mientras el usuario explora el mapa.
+st_folium(m, height=560, width=None, returned_objects=[])
 
 st.markdown("---")
 st.subheader("Capas externas recomendadas (geogpsperu)")

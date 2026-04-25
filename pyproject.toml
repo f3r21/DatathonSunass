@@ -24,8 +24,9 @@ dependencies = [
     "statsmodels>=0.14",
     "shap>=0.46",
     "ruptures>=1.1",
-    # Geo (mapa folium)
+    # Geo (mapa folium + componente Streamlit)
     "folium>=0.17",
+    "streamlit-folium>=0.20",
     "shapely>=2.0",
     # Viz
     "matplotlib>=3.9",

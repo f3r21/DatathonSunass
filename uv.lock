@@ -324,6 +324,7 @@ dependencies = [
     { name = "statsmodels" },
     { name = "streamlit" },
     { name = "streamlit-authenticator" },
+    { name = "streamlit-folium" },
     { name = "xgboost" },
     { name = "xlsxwriter" },
 ]
@@ -365,6 +366,7 @@ requires-dist = [
     { name = "statsmodels", specifier = ">=0.14" },
     { name = "streamlit", specifier = ">=1.39" },
     { name = "streamlit-authenticator", specifier = ">=0.4" },
+    { name = "streamlit-folium", specifier = ">=0.20" },
     { name = "xgboost", specifier = ">=2.1" },
     { name = "xlsxwriter", specifier = ">=3.2" },
 ]
@@ -1733,6 +1735,21 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/83/47/837b158e1a5b0d187d20c6be22c46d84d12a8d3e8d7113b67ebb33e221c9/streamlit_authenticator-0.4.2-py3-none-any.whl", hash = "sha256:442acccef6af65e2b0feb15d5e9f68707f204c1d31c60673690d87179c7ca5b2", size = 43197, upload-time = "2025-03-01T20:36:07.566Z" },
+]
+
+[[package]]
+name = "streamlit-folium"
+version = "0.27.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "branca" },
+    { name = "folium" },
+    { name = "jinja2" },
+    { name = "streamlit" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/43/30/388f878bf577d51409f34f789ea62633918fd57ec6221177a13e646bb3fe/streamlit_folium-0.27.1.tar.gz", hash = "sha256:bf8f2c203d460839fdc2f483405935940ea4c0b476483054600d2c4f862f3e54", size = 526928, upload-time = "2026-03-26T19:58:23.639Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2b/c1/a5925d7cdc6637fddf2bfb6863cd59947e04c5509a4799f010845c82c74a/streamlit_folium-0.27.1-py3-none-any.whl", hash = "sha256:f87ddfa7f44644e3c81340b6d0d544c098f25ddf784ae0b2b6ca3126d7008b21", size = 529238, upload-time = "2026-03-26T19:58:22.276Z" },
 ]
 
 [[package]]
