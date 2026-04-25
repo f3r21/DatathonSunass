@@ -121,9 +121,23 @@ Forward slashes incluso con la letra de unidad. Polars / pyreadstat lo
 manejan sin problema. `\` en `.env` se interpreta como escape y truena.
 
 > Los datasets oficiales NO estan en el repo (son grandes y tienen
-> licencia). Comparto por **Google Drive** desde `99bigdatacloud@gmail.com`.
-> Si necesitas credenciales adicionales para acceder, te las paso por canal
-> privado (no las pongas en commits).
+> licencia). Carpeta compartida en Google Drive:
+> https://drive.google.com/drive/folders/1Zd_7nIvgZE0P1SIoSkayzF5mU3SmksCn?usp=sharing
+>
+> **Como bajar:** abre el link, boton "Descargar" arriba a la derecha (te da
+> un .zip), descomprime y pon la carpeta `datos/` resultante al lado de la
+> carpeta `repo/` que clonaste de GitHub:
+>
+> ```
+> DatathonSunass/
+> ├── repo/      <- git clone
+> └── datos/     <- del Drive
+>     ├── interrupciones/
+>     └── morea/
+> ```
+>
+> Si no tienes acceso al Drive, mandame mensaje con tu correo Google y te
+> habilito.
 
 ## 3 · Smoke test (30 segundos)
 

@@ -122,9 +122,13 @@ repo/
 
 ## Datos compartidos
 
-Los datasets oficiales **no** estan en el repo (tamaño + licencia SUNASS). Se
-intercambian por **USB** o **Google Drive** dentro del equipo. Si tienes acceso al
-Drive, las rutas en `.env` apuntan a tu copia local descargada en `../datos/`.
+Los datasets oficiales **no** estan en el repo (tamaño + licencia SUNASS).
+Carpeta compartida en Drive (acceso restringido al equipo):
+
+> https://drive.google.com/drive/folders/1Zd_7nIvgZE0P1SIoSkayzF5mU3SmksCn?usp=sharing
+
+Descarga el zip, descomprime, y deja la carpeta `datos/` al lado de `repo/`.
+Las rutas por defecto del `.env.example` ya apuntan a `../datos/...`.
 
 ## Insights
 
