@@ -1,0 +1,51 @@
+# Credenciales de la app Datathon SUNASS 2026 - SSA11.
+# Generado con bcrypt. Para regenerar:
+#   python -c "import bcrypt; print(bcrypt.hashpw(b'PASSWORD', bcrypt.gensalt(12)).decode())"
+#
+# Equipo SSA11 (Categoria I Operacional, UCSP):
+#   fer        / ssa11        -> Fernando Ramirez Arredondo
+#   fabio      / ssa11        -> Fabian Manuel Espinoza Koctong (alias 'fabio')
+#
+# Roles de demo:
+#   jurado     / sunass2026
+#   visitante  / jurado
+
+credentials:
+  usernames:
+    fer:
+      email: 99bigdatacloud@gmail.com
+      first_name: Fernando
+      last_name: Ramirez Arredondo
+      password: $2b$12$XGD/dgXWl2LvwuAqL3spJuSs.fLWSYj8aVuU.PZR9hMMz8au6QB16
+      roles:
+        - admin
+    fabio:
+      email: fabian.espinoza@ucsp.edu.pe
+      first_name: Fabian Manuel
+      last_name: Espinoza Koctong
+      password: $2b$12$XGD/dgXWl2LvwuAqL3spJuSs.fLWSYj8aVuU.PZR9hMMz8au6QB16
+      roles:
+        - admin
+    jurado:
+      email: jurado@sunass.gob.pe
+      first_name: Jurado
+      last_name: SUNASS
+      password: $2b$12$Nzjq1Uy525i5WBhu4HwCJOOFHCtgqDkJF9GeRcabp3Iv.zvj8Ssvi
+      roles:
+        - viewer
+    visitante:
+      email: demo@ucsp.edu.pe
+      first_name: Visitante
+      last_name: Demo
+      password: $2b$12$pRgQQqvIw00jQtkk386QZu9vN43GjO9itrPvkz/25bUnXrrd84rHS
+      roles:
+        - viewer
+
+cookie:
+  name: sunass_ssa11_session
+  key: ssa11_ucsp_2026_secret_change_in_prod
+  expiry_days: 1
+
+pre-authorized:
+  emails:
+    - jurado@sunass.gob.pe

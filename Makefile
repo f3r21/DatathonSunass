@@ -1,40 +1,54 @@
-.PHONY: help sync lint format eda train dashboard index chat clean
+.PHONY: help install sync app pipeline lint format docker-build docker-up docker-down docker-logs render-deck clean
 
 PY := uv run python
 STREAMLIT := uv run streamlit
 
 help:
-	@echo "Targets disponibles:"
-	@echo "  make sync       - uv sync (resuelve dependencias)"
-	@echo "  make lint       - ruff check src/ dashboard/"
-	@echo "  make format     - ruff format src/ dashboard/"
-	@echo "  make eda        - corre notebook de EDA"
-	@echo "  make train      - entrena modelos baseline y reporta metricas"
-	@echo "  make index      - construye indice RAG desde docs_sunass/"
-	@echo "  make dashboard  - lanza Streamlit en \$$STREAMLIT_SERVER_PORT"
-	@echo "  make clean      - elimina chroma_db/ y reports/figuras/ generados"
+	@echo "Targets del proyecto Datathon SUNASS 2026:"
+	@echo "  make install      - uv sync (resuelve dependencias)"
+	@echo "  make app          - corre la app Streamlit local (app/Home.py)"
+	@echo "  make pipeline     - corre el pipeline end-to-end (scripts/run_pipeline.py)"
+	@echo "  make docker-build - construye la imagen docker"
+	@echo "  make docker-up    - levanta docker compose"
+	@echo "  make docker-down  - detiene los contenedores"
+	@echo "  make docker-logs  - tail de logs del servicio"
+	@echo "  make render-deck  - renderiza deck Quarto"
+	@echo "  make lint         - ruff check src/ app/ scripts/"
+	@echo "  make format       - ruff format src/ app/ scripts/"
+	@echo "  make clean        - limpia caches y artefactos temporales"
 
-sync:
+install sync:
 	uv sync
 
+app:
+	$(STREAMLIT) run app/Home.py
+
+pipeline:
+	$(PY) scripts/run_pipeline.py
+
+docker-build:
+	docker compose -f docker/docker-compose.yml build
+
+docker-up:
+	docker compose -f docker/docker-compose.yml up -d
+	@echo "App en http://localhost:8501"
+
+docker-down:
+	docker compose -f docker/docker-compose.yml down
+
+docker-logs:
+	docker compose -f docker/docker-compose.yml logs -f app
+
+render-deck:
+	uv run quarto render reports/deck.qmd --to revealjs
+
 lint:
-	uv run ruff check src/ dashboard/
+	uv run ruff check src/ app/ scripts/
 
 format:
-	uv run ruff format src/ dashboard/
-
-eda:
-	$(PY) -m jupyter nbconvert --to notebook --execute notebooks/01_eda.ipynb --output 01_eda.ipynb
-
-train:
-	$(PY) -m src.train
-
-index:
-	$(PY) -m src.rag.build_index
-
-dashboard:
-	$(STREAMLIT) run dashboard/Home.py
+	uv run ruff format src/ app/ scripts/
 
 clean:
-	rm -rf chroma_db/
-	find reports/figuras -type f ! -name '.gitkeep' -delete
+	rm -rf .pytest_cache .ruff_cache .mypy_cache artifacts/
+	rm -rf reports/.quarto reports/_freeze reports/_site _freeze
+	find . -type d -name __pycache__ -prune -exec rm -rf {} +

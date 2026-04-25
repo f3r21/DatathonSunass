@@ -2,10 +2,20 @@
 headless = true
 port = 8501
 address = "0.0.0.0"
+runOnSave = true
+maxUploadSize = 200
 
 [browser]
 gatherUsageStats = false
 
 [theme]
 base = "light"
-primaryColor = "#0A4D8C"
+primaryColor = "#0d3b66"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f7fb"
+textColor = "#1a1a1a"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = true

@@ -1,10 +1,10 @@
 [project]
 name = "datathon-sunass"
 version = "0.1.0"
-description = "Entrega Datathon SUNASS 2026 — Categoria I Operacional (UCSP)"
+description = "Entrega Datathon SUNASS 2026 — Categoria I Operacional (UCSP, equipo SSA11)"
 requires-python = ">=3.12,<3.13"
 readme = "README.md"
-authors = [{ name = "f3r21" }]
+authors = [{ name = "f3r21" }, { name = "fabio" }]
 
 dependencies = [
     # IO y datos
@@ -24,33 +24,18 @@ dependencies = [
     "statsmodels>=0.14",
     "shap>=0.46",
     "ruptures>=1.1",
-    "rapidfuzz>=3.10",
-    # Geo
-    "geopandas>=1.0",
+    # Geo (mapa folium)
     "folium>=0.17",
     "shapely>=2.0",
-    "pyproj>=3.6",
     # Viz
     "matplotlib>=3.9",
-    "seaborn>=0.13",
     "plotly>=5.24",
-    # Dashboard y auth
+    # Dashboard + auth
     "streamlit>=1.39",
     "streamlit-authenticator>=0.4",
     "bcrypt>=4.2",
-    # Notebook
-    "jupyter>=1.1",
-    "ipykernel>=6.29",
-    # LLM y RAG
-    "openai>=1.54",
-    "llama-index>=0.12",
-    "llama-index-llms-ollama>=0.4",
-    "llama-index-embeddings-huggingface>=0.4",
-    "llama-index-vector-stores-chroma>=0.3",
-    "chromadb>=0.5",
-    "sentence-transformers>=3.2",
+    # Reportes (PDF + XLSX)
     "pymupdf>=1.24",
-    "python-docx>=1.1",
 ]
 
 [project.optional-dependencies]
@@ -69,3 +54,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[dependency-groups]
+dev = [
+    "jupyter-cache>=1.0.1",
+    "ipykernel>=6.29",
+]

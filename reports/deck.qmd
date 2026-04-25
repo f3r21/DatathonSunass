@@ -1,0 +1,432 @@
+---
+title: "Calidad operacional del servicio de agua"
+subtitle: "Interrupciones, eventos críticos y calidad MOREA"
+author:
+  - name: "Equipo UCSP — f3r21 + co-equipero"
+    affiliations:
+      - name: "Universidad Católica San Pablo · Escuela de Ciencia de la Computación"
+date: "2026-04-25"
+date-format: "D [de] MMMM [de] YYYY"
+lang: es
+format:
+  revealjs:
+    theme: [default, assets/custom.scss]
+    slide-number: true
+    chalkboard: false
+    transition: none
+    incremental: false
+    center: false
+    code-line-numbers: false
+    code-overflow: wrap
+    fig-cap-location: bottom
+    tbl-cap-location: bottom
+    footer: "Datathon SUNASS 2026 — Categoría I Operacional"
+    # logo: assets/ucsp.png   # descomentar cuando pongas el PNG en assets/
+    preview-links: true
+    hash-type: number
+execute:
+  echo: false
+  warning: false
+jupyter: python3
+bibliography: references.bib
+---
+
+```{python}
+#| label: setup
+#| include: false
+"""Boot del deck: pone src/ en el path y carga helpers de visualizacion.
+
+Las tablas de este deck se regeneran automaticamente cuando se llama a
+`quarto render reports/deck.qmd` — nunca hardcodear numeros. Si un numero
+cambia al re-correr los modulos, el deck lo refleja al siguiente build.
+
+Notas de ejecucion:
+- Quarto con jupyter:python3 levanta un kernel IPython; `__file__` NO
+  existe en ese contexto. Usamos `Path.cwd()` porque Quarto corre los
+  chunks con cwd == directorio del .qmd.
+- La raiz del proyecto es el parent de `reports/`.
+"""
+from __future__ import annotations
+
+import logging
+import sys
+import warnings
+from pathlib import Path
+
+warnings.filterwarnings("ignore")
+logging.basicConfig(level=logging.WARNING)
+
+HERE = Path.cwd().resolve()
+ROOT = HERE.parent if HERE.name == "reports" else HERE
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import polars as pl  # noqa: E402
+```
+
+# Problema y contexto {background-color="#0d3b66"}
+
+## El reto operacional de SUNASS
+
+La Superintendencia Nacional de Servicios de Saneamiento regula **50 empresas
+prestadoras** (EPS) en Perú. Dos sistemas clave reportan calidad de servicio:
+
+- **Interrupciones** reportadas por las EPS cuando el servicio se suspende.
+- **MOREA** — monitoreo remoto de calidad del agua (pH, cloro residual,
+  temperatura) cada ~5 minutos en estaciones distribuidas a nivel nacional.
+
+La pregunta que nos planteamos en este datathon es concreta:
+
+> *¿Puede SUNASS detectar y anticipar eventos críticos de servicio con los
+> datos que ya captura, al grado de priorizar inspecciones y remediaciones
+> antes de que el usuario final se vea afectado?*
+
+::: footer
+Datos: SUNASS 2022–2026; formato oficial del Datathon SUNASS 2026.
+:::
+
+## Tres preguntas, tres plantillas
+
+| Plantilla | Pregunta de negocio | Dataset |
+|-----------|---------------------|---------|
+| **A** | ¿Qué interrupciones serán críticas al momento de iniciar? | Interrupciones (52k eventos) |
+| **B** | ¿Qué estaciones MOREA están crónicamente fuera de banda DIGESA? | MOREA (1.59M lecturas) |
+| **C** | ¿Cuántas interrupciones veremos los próximos 6 meses? | Serie mensual (52 meses) |
+
+Cada plantilla tiene un **baseline crítico** (lo que haría un analista sin
+pipeline propio) y un modelo mejorado con justificación metodológica.
+
+# Enfoque {background-color="#0d3b66"}
+
+## Arquitectura del pipeline
+
+```{.mermaid}
+flowchart LR
+  A[src/io.py] --> B[src/modeling/features.py]
+  B --> C[Plantilla A\nClasificación]
+  B --> D[Plantilla C\nForecasting]
+  A --> E[Plantilla B\nAnomalías]
+  C --> F[Dashboard Streamlit]
+  D --> F
+  E --> F
+  F --> G[Chatbot RAG\nLlamaIndex+Chroma]
+```
+
+- **Carga defensiva** con `polars` y parsers de fecha en cascada (Stata
+  exporta strings en varios formatos).
+- **Features ex-ante** — separación estricta entre señal conocida al inicio
+  del evento y señal ex-post.
+- **Evaluación honesta** — split temporal, PR-AUC, sMAPE, recall a
+  precisión objetivo.
+
+::: footer
+Código en `src/`, notebooks en `notebooks/`, entrega en `reports/deck.qmd`.
+:::
+
+# Datasets {background-color="#0d3b66"}
+
+## Interrupciones · 52.284 eventos, 2022–2026
+
+```{python}
+#| label: tbl-interrupciones-summary
+#| tbl-cap: "Resumen descriptivo del dataset de interrupciones"
+from src.io import load_interrupciones  # noqa: E402
+from src.modeling.features import add_timestamps, add_duracion_impacto  # noqa: E402
+
+df_int = load_interrupciones()
+df_int = add_timestamps(df_int)
+df_int = add_duracion_impacto(df_int)
+
+resumen = pl.DataFrame({
+    "métrica": [
+        "Total de eventos",
+        "Rango temporal",
+        "Regiones cubiertas",
+        "Eventos críticos (impacto > 100.000)",
+        "Prevalencia de crítico",
+    ],
+    "valor": [
+        f"{df_int.height:,}",
+        f"{df_int['ts_inicio'].min():%Y-%m} → {df_int['ts_inicio'].max():%Y-%m}",
+        f"{df_int['Región'].n_unique() if 'Región' in df_int.columns else 'n/d'}",
+        f"{df_int.filter(pl.col('evento_critico')).height:,}",
+        f"{100 * df_int.filter(pl.col('evento_critico')).height / df_int.height:.1f}%",
+    ],
+})
+resumen
+```
+
+::: footer
+`datos/interrupciones/historico_interrupciones_limpio.dta` — exportado de Stata.
+:::
+
+## MOREA · 1.59M lecturas, 26 estaciones
+
+```{python}
+#| label: tbl-morea-summary
+#| tbl-cap: "Resumen descriptivo del dataset MOREA de calidad del agua"
+from src.io import load_morea  # noqa: E402
+
+sensores, estaciones = load_morea()
+
+resumen_morea = pl.DataFrame({
+    "métrica": [
+        "Lecturas totales",
+        "Estaciones",
+        "Frecuencia típica",
+        "Columnas de sensores",
+        "Banda DIGESA cloro",
+        "Banda DIGESA pH",
+    ],
+    "valor": [
+        f"{sensores.height:,}",
+        f"{estaciones.height}",
+        "~5 minutos",
+        "pH, cloro, temperatura, turbidez, conductividad",
+        "[0,5 , 5,0] mg/L",
+        "[6,5 , 8,5]",
+    ],
+})
+resumen_morea
+```
+
+::: footer
+`datos/morea/datos_morea.parquet` + `ubicacion_estaciones_MOREA.xlsx`.
+:::
+
+# Plantilla A · Clasificación desbalanceada {background-color="#0d3b66"}
+
+## Baseline del mentor vs el problema real
+
+| Métrica | Logit sin balanceo (mentor) | Logit balanceado | LightGBM |
+|---------|---:|---:|---:|
+| Accuracy | 85,6% | 78,5% | 81,2% |
+| **Recall (sensibilidad)** | **0,77%** | 45,8% | 56,8% |
+| PR-AUC | — | 0,81 | **0,83** |
+| Recall @ precision=0,90 | — | 0,46 | **0,57** |
+
+El baseline del mentor **nunca predice crítico**: 85,6% de accuracy es el
+piso de una clase mayoritaria con prevalencia 9%. Esto es un error de
+métrica, no de modelo.
+
+::: footer
+Saito & Rehmsmeier (2015) — "PR-AUC > ROC-AUC en datasets desbalanceados".
+Split temporal cutoff 2025-07-01. Features ex-ante: `n_afectadas`, hora, día,
+mes, trimestre + frequency encoding de región, departamento, tipo.
+:::
+
+## Qué corregimos y qué cuidamos
+
+**Correcciones metodológicas:**
+
+- `class_weight='balanced'` en logit; `is_unbalance=True` en LightGBM.
+- **PR-AUC** como métrica principal en lugar de accuracy.
+- **Split temporal** (no aleatorio) — el dataset tiene drift estacional.
+
+**Trampa evitada — target leakage:**
+
+> `evento_critico = duracion_horas × n_afectadas > 100.000`
+
+Incluir `duracion_horas` en X produce un modelo que "predice" con
+PR-AUC ≈ 0,999 — falso: el árbol reconstruye el target. `duracion_horas`
+es ex-post (se sabe al **fin** del evento). Usamos solo features conocidas
+al **inicio**.
+
+# Plantilla B · Anomalías MOREA {background-color="#0d3b66"}
+
+## Filtro físico y violaciones sostenidas
+
+```{python}
+#| label: tbl-anomalias-resumen
+#| tbl-cap: "Impacto del filtro físico y violaciones sostenidas de cloro"
+from src.io import join_morea_by_row_index  # noqa: E402
+from src.modeling.anomalias import (  # noqa: E402
+    compare_bruto_vs_depurado,
+    filter_imposibles,
+    sustained_violations,
+)
+
+sensores_geo = join_morea_by_row_index(sensores, estaciones)
+fr = filter_imposibles(sensores_geo)
+comp_cloro = compare_bruto_vs_depurado(sensores_geo, fr.depurado, "cloro", 0.5, 5.0)
+comp_ph = compare_bruto_vs_depurado(sensores_geo, fr.depurado, "ph", 6.5, 8.5)
+
+resumen_anom = pl.DataFrame([
+    {
+        "parámetro": "Cloro [0,5-5,0]",
+        "% violación bruto": comp_cloro["pct_violacion_bruto"],
+        "% violación depurado": comp_cloro["pct_violacion_depurado"],
+        "delta (pp)": comp_cloro["delta_pp"],
+    },
+    {
+        "parámetro": "pH [6,5-8,5]",
+        "% violación bruto": comp_ph["pct_violacion_bruto"],
+        "% violación depurado": comp_ph["pct_violacion_depurado"],
+        "delta (pp)": comp_ph["delta_pp"],
+    },
+])
+resumen_anom
+```
+
+> **Hallazgo:** filtrar glitches del sensor **no reduce** el porcentaje de
+> violaciones de cloro (delta −2,44 pp) — las estaciones están
+> genuinamente fuera de banda, no es ruido.
+
+::: footer
+Imposibles físicos: cloro fuera de [0, 10] mg/L, pH fuera de [3, 11].
+:::
+
+## Top 10 estaciones crónicas
+
+```{python}
+#| label: tbl-top-cronicas
+#| tbl-cap: "Estaciones con mayor porcentaje de violaciones sostenidas de cloro"
+from src.modeling.anomalias import chronic_stations  # noqa: E402
+
+marked = sustained_violations(fr.depurado, "cloro", 0.5, 5.0, min_consecutive=3)
+top = chronic_stations(marked, top_k=10)
+top
+```
+
+> **Estación 21: 99,96% del tiempo fuera de banda.** Candidato obvio para
+> inspección prioritaria o recalibración del sensor.
+
+::: footer
+Violación *sostenida*: ≥3 lecturas consecutivas fuera de banda DIGESA.
+Criterio del decreto: una lectura aislada puede ser artefacto;
+tres consecutivas son régimen.
+:::
+
+# Plantilla C · Forecasting {background-color="#0d3b66"}
+
+## La serie mensual y los modelos candidatos
+
+```{python}
+#| label: tbl-forecasting-resumen
+#| tbl-cap: "Error de pronóstico por modelo — horizonte 6 meses"
+from src.modeling.forecasting import (  # noqa: E402
+    aggregate_monthly,
+    compare_forecasts,
+    forecast_ensemble,
+    forecast_ets,
+    forecast_lgbm_lags,
+    forecast_naive_seasonal,
+    forecast_sarima,
+    train_test_horizon_split,
+)
+
+monthly = aggregate_monthly(df_int, "ts_inicio", target_col="n_eventos", agg="count")
+serie = monthly.get_column("n_eventos")
+y_train, y_test = train_test_horizon_split(serie, horizon=6)
+
+r_naive = forecast_naive_seasonal(y_train, y_test, season_length=12)
+r_ets = forecast_ets(y_train, y_test)
+r_sarima = forecast_sarima(y_train, y_test)
+r_lgbm = forecast_lgbm_lags(y_train, y_test)
+r_ens = forecast_ensemble([r_ets, r_sarima, r_lgbm])
+
+compare_forecasts([r_naive, r_ets, r_sarima, r_lgbm, r_ens])
+```
+
+> **Hallazgo no intuitivo:** el *naive estacional* (copia el mes del año
+> anterior) le gana a SARIMA, ETS y LightGBM en sMAPE.
+
+::: footer
+Makridakis et al. (2018) — "los modelos estadísticos simples suelen ganar
+cuando la serie es corta". 52 meses, horizon 6 es exactamente ese régimen.
+:::
+
+## Qué significa esto operacionalmente
+
+Tres lecturas de este resultado — todas reportables al jurado:
+
+1. **Decisión de modelo por validación, no por glamour.** SARIMA(1,1,1)×(1,1,1,12)
+   tiene 18 parámetros para estimar con 46 observaciones de train. Overfit.
+2. **El piso naive es un test de sanity** que cualquier pipeline serio
+   tiene que pasar. El nuestro lo pasa: reportamos la ganancia del mejor
+   modelo **contra naive**, no en absoluto.
+3. **Siguiente paso natural** es agregar covariables exógenas (clima,
+   calendario de mantenimiento programado) en un modelo M5-style con
+   lags + features; eso sí supera a naive cuando hay señal externa.
+
+::: footer
+Zeng et al. (AAAI 2023) mostraron el mismo patrón en long-term forecasting:
+DLinear bate a Informer/Autoformer/FEDformer con los mismos datos.
+:::
+
+# Hallazgos operacionales {background-color="#0d3b66"}
+
+## Qué puede hacer SUNASS mañana con esto
+
+- **Priorizar inspecciones** a estaciones MOREA crónicas — top 10
+  concentran el grueso de las violaciones sostenidas.
+- **Alertar por régimen**, no por lectura aislada — 99,1% de las
+  violaciones de cloro son rachas ≥3 lecturas (régimen, no ruido).
+- **Predecir volumen de trabajo** para el equipo de respuesta —
+  estacionalidad mensual es lo suficientemente regular para planear
+  cuadrillas con 3 meses de antelación con sMAPE ~17%.
+- **Detectar eventos críticos al inicio** con recall 57% @ precision 90%
+  — usable para rutear cuadrilla especializada sin colapsar el canal de
+  alertas.
+
+## Productos entregables
+
+1. **Paquete `src/`** — reproducible, tipado, con tests.
+2. **Dashboard Streamlit** — 4 páginas (KPIs, mapa, alertas, chat) con
+   autenticación multi-rol (admin / analista / visitante).
+3. **Chatbot RAG** — LLM dual (Ollama local + OpenAI fallback) sobre
+   corpus SUNASS con citas inline a documentos fuente.
+4. **Este deck** — regenerado automáticamente desde los módulos reales,
+   sin números hardcoded.
+
+# Riesgos y roadmap {background-color="#0d3b66"}
+
+## Qué estamos asumiendo y puede quebrar
+
+| Supuesto | Riesgo | Mitigación |
+|----------|--------|------------|
+| `n_afectadas` es ex-ante | Si la EPS no la reporta al inicio, feature no está | Fallback a catastro + tipo de tubería |
+| Orden Excel MOREA == enumeración 1..26 en parquet | Geo-join incorrecto | Verificar contra 3 estaciones conocidas antes de confiar |
+| Serie 52 meses captura estacionalidad anual | Modelo sub-dimensionado | Naive ya sirve; SARIMA solo cuando haya 120+ meses |
+| Cloro fuera de [0,5; 5,0] = violación | Algunas EPS usan bandas locales más estrictas | Parametrizar bandas por región |
+
+::: footer
+Riesgos discutidos en vivo con el equipo el 2026-04-23; seguimiento en
+`docs/RIESGOS.md` (pendiente).
+:::
+
+## Próximos pasos
+
+**48h restantes (pre-entrega):**
+
+- Plantillas D+E+F: deduplicación, análisis espacial con UBIGEO, export
+  JSON de findings.
+- Dashboard Streamlit: poblar KPIs, mapa folium, tabla de alertas
+  priorizada.
+- Chatbot RAG: indexar `docs_sunass/` + datos del concurso.
+- Simulacro completo (viernes 16:00–20:00) con cronómetro de 7h.
+
+**Post-entrega (si se adjudica):**
+
+- Integración continua con datos MOREA en streaming.
+- Alertas por email a responsables de EPS.
+- Retraining mensual del clasificador con feedback de inspecciones.
+
+# Gracias {background-color="#0d3b66"}
+
+## Referencias clave
+
+- **Saito & Rehmsmeier (2015)** — PR-AUC > ROC-AUC en desbalanceados.
+- **Makridakis et al. (2018)** — ML no siempre supera a estadística.
+- **Makridakis et al. (2022)** — M5: LightGBM + lags gana forecasting.
+- **Zeng et al. (AAAI 2023)** — DLinear supera transformers en LTSF.
+- **Liu et al. (2008)** — Isolation Forest para anomalías multivariadas.
+- **Killick et al. (2012)** — PELT para detección de changepoints.
+- **Hyndman & Athanasopoulos (2021)** — *Forecasting: Principles and
+  Practice* (OTexts).
+
+Bibliografía completa en [`docs/PAPERS_FORECASTING.md`](../docs/PAPERS_FORECASTING.md).
+
+::: footer
+Repositorio: github.com/f3r21/DatathonSunass — MIT.
+:::

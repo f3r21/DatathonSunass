@@ -1,108 +1,172 @@
-# Arquitectura — Datathon SUNASS 2026
+# Arquitectura — Datathon SUNASS 2026 · SSA11
 
-Este documento describe cómo se acoplan los tres subsistemas de la entrega: análisis, dashboard y chatbot corporativo con RAG.
+Describe los componentes en uso y como se conectan. **Nada de aqui es
+aspiracional**: si un componente no existe en `src/` o `app/`, no esta en este
+documento.
 
-## Diagrama de alto nivel
+## Componentes
+
+### App Streamlit (`app/`)
+
+Multi-pagina con login wall en cada vista (`require_auth`), tema azul+verde
+SUNASS y botón **Cerrar sesion** persistente en el sidebar.
+
+| Archivo                         | Resultado oficial cubierto |
+|---------------------------------|----------------------------|
+| `Home.py`                       | 3 (indicadores)            |
+| `pages/0_Ejecutivo.py`          | 1 (tableros) + 4 (deteccion)|
+| `pages/1_Datos.py`              | 3 (indicadores)            |
+| `pages/2_EDA.py`                | 3 (indicadores)            |
+| `pages/3_Modelo.py`             | 6 (IA aplicada)            |
+| `pages/4_Forecasting.py`        | 6 (IA aplicada)            |
+| `pages/5_Alertas.py`            | 4 (deteccion) + 7 (atencion oportuna)|
+| `pages/6_Modo_Dia_D.py`         | 6 (uploader generico SENAMHI)|
+| `pages/7_Reportes.py`           | 2 (reportes XLSX/PDF)      |
+| `pages/8_Mapa.py`               | 1 + 5 (folium + geogpsperu)|
+| `pages/9_Stream.py`             | 4 (notificaciones live)    |
+| `components/auth.py`            | login wall + logout sidebar|
+| `components/data_loader.py`     | carga cacheada con st.cache|
+| `components/theme.py`           | paleta + Plotly template   |
+| `components/kpi.py`             | KPI cards reutilizables    |
+
+### Paquete `src/`
+
+Logica pura, sin dependencias de Streamlit. Reusable desde la app, scripts CLI
+y notebooks.
 
 ```
-                              +---------------------------+
-                              |   Datasets oficiales      |
-                              |   - interrupciones .dta   |
-                              |   - morea .parquet        |
-                              |   - estaciones .xlsx      |
-                              +-------------+-------------+
-                                            |
-                                            v
-+----------------------------+    +---------+----------+    +---------------------+
-|   docs SUNASS (PDFs)       |    |   src/io.py        |    |   config/users.yaml |
-|   + resultados del análisis|    |   src/eda.py       |    |   bcrypt + roles    |
-|   + tablas exportadas      |    |   src/features.py  |    +----------+----------+
-+-------------+--------------+    |   src/models.py    |               |
-              |                   +---------+----------+               |
-              v                             |                          |
-+-------------+--------------+               v                          |
-|   src/rag/build_index.py   |    +---------+----------+               |
-|   - PyMuPDF / python-docx  |    |   notebooks/*.ipynb|               |
-|   - sentence-transformers  |    |   reports/tablas/  |               |
-|   - Chroma persistente     |    |   reports/figuras/ |               |
-+-------------+--------------+    +---------+----------+               |
-              |                             |                          |
-              v                             v                          v
-+-------------+-------------------------------------------------------+---+
-|                        dashboard/ (Streamlit multi-page)               |
-|  Home.py | 1_KPIs.py | 2_Mapa.py | 3_Alertas.py | 4_Chat.py            |
-|          |                                                             |
-|          +-- streamlit-authenticator  (role-gated: admin/analista/vis)  |
-+---------------------------------+--------------------------------------+
-                                  |
-                                  v
-                    +-------------+-------------+
-                    |    src/llm.py LLMClient   |
-                    |    dual backend           |
-                    +------+-------------+------+
-                           |             |
-                 primario  v             v  fallback
-            +--------------+--+    +-----+------------+
-            |  Ollama 3060    |    |   OpenAI API     |
-            |  remoto:11434   |    |   gpt-4o-mini    |
-            |  llama3.1:8b-Q4 |    |   (requiere red) |
-            +-----------------+    +------------------+
+src/
+├── io.py                   load_interrupciones (.dta), load_morea (.parquet
+│                           + .xlsx), load_senamhi_daily (.csv/.xlsx),
+│                           paths_from_env() resuelve rutas relativas a .env
+├── inspector.py            inspect_dataframe → ColumnInfo (kind, dtype, nulls,
+│                           confidence). Detecta numerico, categorico, datetime,
+│                           time, geo_lat, geo_lon, geo_combined, identifier.
+├── eda.py                  perfilado de DataFrames (legacy, opcional)
+├── modeling/
+│   ├── features.py         add_timestamps, add_duracion_impacto,
+│   │                       add_temporal_features, frequency_encode,
+│   │                       build_feature_matrix
+│   ├── anomalias.py        filter_imposibles (FilterResult),
+│   │                       sustained_violations, chronic_stations,
+│   │                       isolation_forest_scan, ruptures_changepoints
+│   ├── clasificacion.py    train_logit, train_xgboost, train_xgboost_grid
+│   │                       (GridSearchCV → GridSearchReport con
+│   │                       feature_importance + cv_results_top)
+│   └── forecasting.py      forecast_naive_seasonal, forecast_ets,
+│                           forecast_sarima, forecast_lgbm_lags,
+│                           forecast_xgb_lags, forecast_ensemble,
+│                           train_test_horizon_split, aggregate_monthly,
+│                           compare_forecasts (sMAPE)
+├── monitoring/
+│   ├── thresholds.py       DIGESA_CLORO/PH/TURBIEDAD, ThresholdConfig,
+│   │                       detect_violations, stream_scan
+│   ├── climate_thresholds.py   ClimateThreshold + DEFAULT_CLIMATE_THRESHOLDS
+│   │                       (precip extremo, ola de calor, helada, p95/p98)
+│   ├── alerts.py           AlertEvent, build_alerts (colapsa rachas),
+│   │                       summarize_alerts
+│   └── incidents.py        IncidentRecord + IncidentStore (JSON), workflow
+│                           NUEVO/EN_REVISION/RESUELTO con transiciones
+├── reports/
+│   └── export.py           ReportContext, build_report_xlsx (5 hojas),
+│                           build_report_pdf (PyMuPDF, A4)
+└── viz/
+    └── eda.py              correlation_heatmap, distribution_histogram,
+                            boxplot_by_group, interrupciones_timeline,
+                            morea_sensor_timeline
 ```
 
-## Decisiones clave
+### Scripts CLI
 
-### LLM dual (opensource + fallback)
+```
+scripts/
+├── run_pipeline.py     raw → clean → features → XGBoost+Grid → forecast →
+│                       artifacts/ (run_summary.json, modelo_metricas.json,
+│                       feature_importance.csv, forecast_metrics.csv,
+│                       interrupciones_enriched.parquet, morea_depurado.parquet)
+└── smoke_setup.py      Valida entorno en <30s: Python 3.12, .env, datasets
+                        accesibles, imports, carga real, auth bcrypt.
+```
 
-El reto exige un chatbot opensource. Cumplimos con **Ollama + Llama 3.1 8B Q4** corriendo en la desktop con RTX 3060 (12 GB VRAM, 32 GB RAM), accesible remotamente. OpenAI queda como fallback de red por si el túnel a la 3060 se cae durante la exposición presencial en UCSP Arequipa.
+### Contenedor
 
-`LLMClient` (`src/llm.py`) se comporta según `LLM_BACKEND`:
+```
+docker/
+├── Dockerfile          python:3.12-slim + uv + libgomp; healthcheck en
+│                       /_stcore/health; expone 8501
+├── docker-compose.yml  Monta ../../datos como /data:ro; inyecta env
+└── .dockerignore       Excluye datos pesados, .venv, _site, _freeze
+```
 
-- `ollama`: solo servidor local. Si `OLLAMA_BASE_URL` no responde en <2 s, error duro.
-- `openai`: solo API remota. Falla si `OPENAI_API_KEY` ausente.
-- `auto` (por defecto en demo): probe a `/api/tags`; si responde, usar Ollama; si no, caer a OpenAI con log visible.
+### Reportes
 
-### RAG con citas verificables
+```
+reports/
+├── deck.qmd            Slides Quarto revealjs (en evolucion; ver tarea 28)
+├── _quarto.yml         Profile deck + handout PDF
+├── assets/custom.scss  Tema SUNASS revealjs
+└── references.bib      Hyndman & Athanasopoulos, Clemen, Makridakis, Zeng
+```
 
-- Corpus: PDFs oficiales SUNASS (`docs/`), transcripciones de mentoría (`clases/`), tablas exportadas del análisis (`reports/tablas/*.xlsx`), y hallazgos en Markdown (`reports/findings/*.md`).
-- Chunking: 512 tokens con overlap 64. Documentos largos (PDFs de reglamento) se pre-segmentan por capítulo cuando la estructura lo permite.
-- Embeddings: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (ES-first, 384-dim, corre en CPU).
-- Vector store: Chroma persistente en `chroma_db/`. Se reconstruye con `make index` y tarda <2 min en la 3060.
-- Recuperación: top-5 con re-rank por similaridad coseno. Cada respuesta del chat cita fuente + offset.
+### Configuracion
 
-### Autenticación por rol
+```
+config/users.yaml       Credenciales bcrypt (fer, fabio admin; jurado, visitante viewer)
+.streamlit/config.toml  Tema + server config
+.env.example            Plantilla con rutas a datasets
+.gitattributes          eol=lf para evitar guerras CRLF Mac vs Windows
+```
 
-`streamlit-authenticator` con hashes bcrypt en `config/users.yaml`. Tres roles:
+## Flujo de datos
 
-- `admin`: todas las páginas + export de findings + panel de auditoría.
-- `analista`: KPIs, mapa, alertas, chat completo.
-- `visitante`: solo KPIs agregados (panel de demo para el jurado sin credenciales).
+```
+.dta + .parquet + .xlsx (datos/)
+       │
+       ├──► src.io.load_interrupciones / load_morea / load_senamhi_daily
+       │         │
+       │         ▼
+       │     pl.DataFrame (con tipos correctos, fechas parseadas)
+       │         │
+       ├─────────┼────────────────────┬────────────────────┐
+       │         │                    │                    │
+       ▼         ▼                    ▼                    ▼
+  src.eda    src.modeling.features   src.modeling.anomalias  src.monitoring
+       │         │                    │                    │
+       │         ▼                    ▼                    ▼
+       │    add_temporal_features    filter_imposibles    detect_violations
+       │    build_feature_matrix     sustained_violations build_alerts
+       │         │                    │                    │
+       │         ▼                    ▼                    ▼
+       │   train_xgboost_grid    chronic_stations       AlertEvent[]
+       │         │                                        │
+       │         ▼                                        ▼
+       │   GridSearchReport                          IncidentStore.upsert
+       │
+       └────► src.viz.eda → Plotly figures → app/ pages
+```
 
-`config/users.yaml` **no se comitea**. Se genera con `uv run python -m src.auth_setup` y el seed queda en `.env` (`AUTH_SEED`).
+## Convenciones
 
-### Reproducibilidad
+- **Polars first.** Pandas solo para xlsxwriter y Plotly cuando hace falta.
+- **No prints.** Todo via `logger = logging.getLogger(__name__)`.
+- **Frozen dataclasses** para resultados (`FilterResult`, `ColumnProfile`,
+  `ModelEvaluation`, `GridSearchReport`, `ForecastResult`, `AlertEvent`,
+  `ColumnInfo`, `ReportContext`, `IncidentRecord`).
+- **Type annotations** en todas las firmas, PEP 8.
+- **Spanish** en docstrings + comentarios; identificadores en ingles.
+- **No emojis** en codigo.
+- **`paths_from_env()`** resuelve rutas relativas contra el `.env` parent, asi
+  el pipeline corre desde cualquier cwd (app, scripts, reports).
 
-- `uv` con `pyproject.toml` + `uv.lock` en git → `uv sync` recrea el entorno.
-- Datos grandes fuera del repo, referenciados por `.env`.
-- Notebooks ejecutables vía `make eda`; entrenamiento vía `make train`; índice RAG vía `make index`.
-- Ninguna ruta absoluta. Todo relativo a la raíz del proyecto o a paths de `.env`.
+## Excluido del entregable
 
-## Topología en el día del concurso
+Componentes considerados y descartados antes del 25-abr-2026:
 
-Máquinas disponibles el sábado 25/04/2026 en UCSP:
-
-| Máquina              | Rol                                                        |
-|----------------------|------------------------------------------------------------|
-| MacBook Air M2 24 GB | Dashboard + notebooks (entorno de exposición)              |
-| Laptop RTX 5060      | Entrenamiento pesado de XGBoost/LightGBM + build del índice |
-| Desktop RTX 3060 (remota, 32 GB RAM) | Servidor Ollama via SSH/Tailscale            |
-| GCP (Tier 1+)        | Backup cómputo si la 5060 falla                            |
-
-En modo degradado (sin red estable a la 3060): M2 levanta Ollama con Llama 3.2 3B Q4 y el chatbot sigue funcional, con LLMClient anunciándolo al jurado.
-
-## Flujo de datos en una query del chat
-
-1. Usuario envía pregunta en `dashboard/pages/4_Chat.py`.
-2. `retrieve.py` embeba la pregunta, consulta Chroma con top-5.
-3. Se construye prompt con contexto + instrucciones de citar.
-4. `LLMClient.chat(...)` enruta a Ollama o OpenAI según configuración.
-5. Respuesta se muestra con streaming; las citas se renderizan como expanders con fragmento + nombre de archivo + offset.
+- **RAG + chatbot** sobre PDFs SUNASS — fuera del scope para este sabado;
+  no estaba pidiendo el reto.
+- **Ollama / OpenAI dual-mode** — sin LLM no hay deps pesadas (sentence-
+  transformers, llama-index, chromadb borradas del lock).
+- **Auth multi-rol granular** — solo admin/viewer; no hace falta mas.
+- **Mapas con shapefiles cargados** — la pagina 8 esta lista para superponer
+  capas de geogpsperu cuando aterrice un `.shp`, pero no incluimos los
+  shapefiles en el repo.

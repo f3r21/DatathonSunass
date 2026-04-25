@@ -1,0 +1,19 @@
+project:
+  type: default
+  output-dir: _site
+
+# Profile "deck" => quarto render reports/deck.qmd renderea revealjs.
+# Profile "handout" => output pdf para dejar al jurado (opcional).
+profiles:
+  deck:
+    format: revealjs
+  handout:
+    format:
+      pdf:
+        documentclass: article
+        papersize: a4
+
+execute:
+  freeze: auto    # regenera chunks solo cuando el .qmd o sus imports cambian
+
+lang: es

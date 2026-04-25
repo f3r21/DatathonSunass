@@ -1,0 +1,23 @@
+# Forzar line endings LF en el repo para evitar guerras CRLF/LF entre
+# el Mac de fer (M2) y el Windows de Fabian.
+# Git for Windows hace checkout con CRLF si autocrlf=true; con esto los
+# archivos quedan LF en disco siempre.
+
+* text=auto eol=lf
+
+# Binarios — sin conversion.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.parquet binary
+*.dta binary
+*.xlsx binary
+*.xls binary
+*.mp4 binary
+*.mov binary
+*.zip binary
+*.tar.gz binary
+*.svg text

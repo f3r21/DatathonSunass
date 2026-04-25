@@ -1,0 +1,29 @@
+# Orquestacion de la app SUNASS para levantar con 'docker compose up' desde repo/.
+# Incluye volumes para montar los datasets oficiales sin tener que embeberlos en la imagen.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: datathon-sunass:latest
+    container_name: sunass-app
+    ports:
+      - "8501:8501"
+    environment:
+      INTERRUPCIONES_PATH: /data/interrupciones/historico_interrupciones_limpio.dta
+      MOREA_PARQUET_PATH: /data/morea/datos_morea.parquet
+      MOREA_ESTACIONES_PATH: /data/morea/ubicacion_estaciones_MOREA.xlsx
+      TZ: America/Lima
+    volumes:
+      - ../../datos:/data:ro
+      - app_cache:/root/.cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  app_cache:

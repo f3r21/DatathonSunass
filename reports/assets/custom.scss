@@ -1,0 +1,60 @@
+/*-- scss:defaults --*/
+
+// Paleta UCSP-aware + SUNASS azul agua
+$primary: #0d3b66;        // SUNASS azul institucional
+$body-color: #1a1a1a;
+$link-color: #118ab2;
+$code-color: #06413f;
+
+$font-family-sans-serif: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+$font-family-monospace: "JetBrains Mono", "Menlo", "Consolas", monospace;
+
+$presentation-heading-color: $primary;
+$presentation-heading-font: $font-family-sans-serif;
+$presentation-heading-font-weight: 600;
+
+$presentation-font-size-root: 28px;
+
+/*-- scss:rules --*/
+
+.reveal .slide h1,
+.reveal .slide h2 {
+  letter-spacing: -0.01em;
+}
+
+.reveal table {
+  font-size: 0.85em;
+  margin: 0 auto;
+}
+
+.reveal table th {
+  background-color: rgba(13, 59, 102, 0.08);
+  text-align: left;
+  font-weight: 600;
+}
+
+.reveal blockquote {
+  border-left: 4px solid $primary;
+  padding: 0.5em 1em;
+  background: rgba(13, 59, 102, 0.04);
+  font-style: normal;
+}
+
+.reveal .footer {
+  font-size: 0.55em;
+  color: #666;
+}
+
+// Portada con gradiente azul agua
+.reveal .slide.title-slide {
+  background: linear-gradient(135deg, $primary 0%, #118ab2 100%);
+  color: white;
+}
+
+.reveal .slide.title-slide h1,
+.reveal .slide.title-slide h2,
+.reveal .slide.title-slide .subtitle,
+.reveal .slide.title-slide .author,
+.reveal .slide.title-slide .date {
+  color: white;
+}
