@@ -34,6 +34,51 @@ from sklearn.metrics import (
 logger = logging.getLogger(__name__)
 
 
+def _xgb_device() -> str:
+    """Detecta el mejor dispositivo para XGBoost: cuda > cpu.
+
+    Compatible con Windows (NVIDIA), Linux (NVIDIA) y macOS (sin GPU).
+    En Mac o cualquier maquina sin CUDA cae automaticamente a CPU.
+    """
+    try:
+        import numpy as _np
+        from xgboost import XGBClassifier as _XGB
+        _m = _XGB(n_estimators=1, device="cuda", tree_method="hist")
+        _m.fit(_np.array([[1.0]]), _np.array([0]))
+        logger.info("XGBoost: usando GPU (cuda)")
+        return "cuda"
+    except Exception:
+        logger.info("XGBoost: GPU no disponible, usando CPU")
+        return "cpu"
+
+
+def _lgbm_device() -> str:
+    """Detecta el mejor dispositivo para LightGBM: cuda > gpu > cpu.
+
+    LightGBM 4.x soporta device='cuda' (NVIDIA moderna).
+    device='gpu' es la API antigua (OpenCL). Ambos caen a CPU en Mac/sin GPU.
+    """
+    import numpy as _np
+    from lightgbm import LGBMClassifier as _LGBM
+
+    for _dev in ("cuda", "gpu"):
+        try:
+            _m = _LGBM(n_estimators=1, device=_dev, verbose=-1)
+            _m.fit(_np.array([[1.0], [2.0]]), _np.array([0, 1]))
+            logger.info("LightGBM: usando GPU (%s)", _dev)
+            return _dev
+        except Exception:
+            pass
+
+    logger.info("LightGBM: GPU no disponible, usando CPU")
+    return "cpu"
+
+
+# Detectar una sola vez al importar el modulo
+_XGB_DEVICE: str = _xgb_device()
+_LGBM_DEVICE: str = _lgbm_device()
+
+
 @dataclass(frozen=True)
 class ModelEvaluation:
     """Resultado de evaluar un clasificador sobre el test set."""
@@ -226,7 +271,8 @@ def train_xgboost(
         objective="binary:logistic",
         eval_metric="aucpr",
         tree_method="hist",
-        n_jobs=-1,
+        device=_XGB_DEVICE,
+        n_jobs=-1 if _XGB_DEVICE == "cpu" else 1,
         random_state=42,
     )
     model.fit(xa_train, ya_train)
@@ -259,7 +305,8 @@ def train_lightgbm(
         learning_rate=learning_rate,
         is_unbalance=True,
         objective="binary",
-        n_jobs=-1,
+        device=_LGBM_DEVICE,
+        n_jobs=-1 if _LGBM_DEVICE == "cpu" else 1,
         random_state=42,
         verbose=-1,
     )
@@ -342,6 +389,7 @@ def train_xgboost_grid(
         objective="binary:logistic",
         eval_metric="aucpr",
         tree_method="hist",
+        device=_XGB_DEVICE,
         n_jobs=1,
         random_state=42,
     )

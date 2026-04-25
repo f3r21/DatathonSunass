@@ -49,8 +49,14 @@ def _monthly_series() -> pl.DataFrame:
     df = get_interrupciones(enriched=True)
     if "ts_inicio" not in df.columns or "duracion_horas" not in df.columns:
         raise RuntimeError("Faltan columnas enriquecidas.")
+    # Excluir el mes en curso: puede estar incompleto y distorsiona el holdout.
+    import datetime as _dt
+    today = _dt.date.today()
+    month_start = _dt.date(today.year, today.month, 1)
     df_valid = df.filter(
-        pl.col("ts_inicio").is_not_null() & pl.col("duracion_horas").is_not_null()
+        pl.col("ts_inicio").is_not_null()
+        & pl.col("duracion_horas").is_not_null()
+        & (pl.col("ts_inicio").dt.date() < pl.lit(month_start))
     )
     return aggregate_monthly(df_valid, "ts_inicio", "duracion_horas", agg="sum")
 
@@ -84,8 +90,10 @@ def _run_forecasts(horizon: int) -> list[ForecastResult]:
     except Exception as exc:
         st.warning(f"XGBoost fallo: {exc}")
 
+    # Ensemble con los 2 mejores modelos por sMAPE (evita arrastrar los peores).
     if len(results) >= 2:
-        results.append(forecast_ensemble(results, name="ensemble_mean"))
+        top2 = sorted(results, key=lambda r: r.smape)[:2]
+        results.append(forecast_ensemble(top2, name="ensemble_top2"))
     return results
 
 
@@ -94,14 +102,10 @@ def _chart_forecast(results: list[ForecastResult], monthly: pl.DataFrame) -> go.
     periods = monthly.get_column("ym").to_list()
     values = monthly.get_column("duracion_horas").to_list()
     n_train = len(results[0].y_train)
-    train_x = periods[:n_train]
     test_x = periods[n_train:]
 
     fig.add_trace(
-        go.Scatter(x=train_x, y=values[:n_train], mode="lines", name="train", line=dict(color=PALETTE.muted))
-    )
-    fig.add_trace(
-        go.Scatter(x=test_x, y=values[n_train:], mode="lines+markers", name="real test", line=dict(color=PALETTE.text, width=2))
+        go.Scatter(x=periods, y=values, mode="lines", name="historico", line=dict(color=PALETTE.muted))
     )
     palette = [PALETTE.primary, PALETTE.success, PALETTE.warning, PALETTE.secondary, PALETTE.danger, PALETTE.accent]
     for r, color in zip(results, palette, strict=False):

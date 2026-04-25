@@ -1,7 +1,7 @@
 .PHONY: help install sync app pipeline lint format docker-build docker-up docker-down docker-logs render-deck clean
 
 PY := uv run python
-STREAMLIT := uv run streamlit
+STREAMLIT := uv run python -m streamlit
 
 help:
 	@echo "Targets del proyecto Datathon SUNASS 2026:"
