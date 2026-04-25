@@ -9,6 +9,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import base64
+
 import folium
 import polars as pl
 import streamlit as st
@@ -144,14 +146,16 @@ for row in df_geo.iter_rows(named=True):
 
 folium.LayerControl().add_to(m)
 
-# Folium expone un iframe-en-HTML; lo envolvemos para fijar la altura sin
-# depender de la API deprecada streamlit.components.v1.html.
-_map_html = (
-    f'<div style="height:560px;overflow:hidden;border-radius:6px;">'
-    f"{m._repr_html_()}"
-    f"</div>"
+# Renderizado: folium produce un standalone HTML page; lo servimos via data URL
+# dentro de un iframe controlado por nosotros. Esto evita el problema de
+# "Make this Notebook Trusted" cuando _repr_html_() se anida en st.html().
+_full_html = m.get_root().render()
+_b64 = base64.b64encode(_full_html.encode("utf-8")).decode("ascii")
+st.html(
+    f'<iframe src="data:text/html;base64,{_b64}" '
+    f'width="100%" height="560" '
+    f'style="border:none;border-radius:6px;"></iframe>'
 )
-st.html(_map_html)
 
 st.markdown("---")
 st.subheader("Capas externas recomendadas (geogpsperu)")
