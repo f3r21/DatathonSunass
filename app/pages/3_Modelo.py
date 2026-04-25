@@ -14,7 +14,12 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from app.components.auth import require_auth  # noqa: E402
-from app.components.data_loader import data_available, get_interrupciones  # noqa: E402
+from app.components.data_loader import (  # noqa: E402
+    data_available,
+    get_interrupciones,
+    get_morea_estaciones,
+    get_morea_sensores,
+)
 from app.components.theme import PALETTE  # noqa: E402
 from src.modeling.clasificacion import (  # noqa: E402
     GridSearchReport,
@@ -24,6 +29,7 @@ from src.modeling.clasificacion import (  # noqa: E402
 from src.modeling.features import (  # noqa: E402
     add_temporal_features,
     frequency_encode,
+    join_eventos_calidad,
 )
 
 st.set_page_config(page_title="Modelo · SUNASS", layout="wide")
@@ -50,7 +56,15 @@ def _df_feat() -> pl.DataFrame:
     df = get_interrupciones(enriched=True)
     if "ts_inicio" not in df.columns or "evento_critico" not in df.columns:
         raise RuntimeError("Faltan columnas enriquecidas (ts_inicio/evento_critico).")
-    return add_temporal_features(df)
+    df = add_temporal_features(df)
+    # Enriquecer con features de calidad de agua MOREA (best-effort).
+    try:
+        df_morea = get_morea_sensores()
+        df_est   = get_morea_estaciones()
+        df = join_eventos_calidad(df, df_morea, df_est)
+    except Exception as _exc:
+        st.toast(f"Features MOREA no disponibles: {_exc}", icon="⚠️")
+    return df
 
 
 df_feat = _df_feat()

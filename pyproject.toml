@@ -28,6 +28,7 @@ dependencies = [
     "folium>=0.17",
     "streamlit-folium>=0.20",
     "shapely>=2.0",
+    "ubigeos-peru>=0.2",
     # Viz
     "matplotlib>=3.9",
     "plotly>=5.24",

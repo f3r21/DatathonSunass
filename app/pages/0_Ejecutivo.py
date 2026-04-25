@@ -103,8 +103,14 @@ def _snapshot() -> dict[str, object]:
     # Tendencia mensual total + criticos.
     tendencia = pl.DataFrame()
     if "ts_inicio" in df_int.columns:
+        import datetime as _dt
+        _hoy = _dt.date.today()
+        _mes_actual = _dt.date(_hoy.year, _hoy.month, 1)
         tendencia = (
-            df_int.filter(pl.col("ts_inicio").is_not_null())
+            df_int.filter(
+                pl.col("ts_inicio").is_not_null()
+                & (pl.col("ts_inicio").dt.date() < pl.lit(_mes_actual))
+            )
             .with_columns(pl.col("ts_inicio").dt.truncate("1mo").alias("_periodo"))
             .group_by("_periodo")
             .agg(
@@ -171,18 +177,24 @@ with col_izq:
             label, color = _traffic_light(row["pct_sostenida"])
             rows_html.append(
                 f"""
-                <div style="display:flex; align-items:center; padding:6px 10px;
+                <div style="display:flex; align-items:center; gap:8px;
+                            padding:6px 12px 6px 10px;
                             background:{PALETTE.bg_soft}; margin-bottom:4px;
                             border-left: 4px solid {color}; border-radius:3px;">
-                    <div style="flex:1; font-weight:600;">Estacion {row['estacion_id']}</div>
-                    <div style="flex:1; color:{PALETTE.muted}; font-size:0.85rem;">
+                    <div style="flex:0 0 110px; font-weight:600; white-space:nowrap;">
+                        Estacion {row['estacion_id']}
+                    </div>
+                    <div style="flex:1; min-width:0; color:{PALETTE.muted};
+                                font-size:0.85rem; white-space:nowrap; overflow:hidden;
+                                text-overflow:ellipsis;">
                         {row['n_sostenida']} sostenidas / {row['n_lecturas']} lecturas
                     </div>
-                    <div style="width:90px; text-align:right;">
+                    <div style="flex:0 0 auto; padding-left:8px;">
                         <span style="background:{color}; color:white;
                                      padding:2px 10px; border-radius:10px;
-                                     font-size:0.75rem; font-weight:700;">
-                            {label} {row['pct_sostenida']:.1f}%
+                                     font-size:0.75rem; font-weight:700;
+                                     white-space:nowrap; display:inline-block;">
+                            {label}&nbsp;{row['pct_sostenida']:.1f}%
                         </span>
                     </div>
                 </div>
